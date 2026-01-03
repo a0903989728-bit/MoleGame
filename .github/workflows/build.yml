@@ -1,4 +1,4 @@
-name: Build Android APK (Native)
+name: Build Android APK (Ubuntu 22.04)
 
 on:
   push:
@@ -8,18 +8,19 @@ on:
 
 jobs:
   build-android:
-    runs-on: ubuntu-latest
+    # 關鍵修改：強制使用 Ubuntu 22.04 (這版本才有 libtinfo5)
+    runs-on: ubuntu-22.04
 
     steps:
-      # 1. 下載你的程式碼
+      # 1. 下載程式碼
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 設定 Java 17 (Android 打包需要)
-      - name: Set up JDK 17
+      # 2. 設定 Java 11 (Buildozer 在 22.04 上配 Java 11 最穩)
+      - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
 
       # 3. 設定 Python 3.10
@@ -28,49 +29,55 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 4. 安裝 Buildozer 必要的系統工具 (這行最重要，解決環境問題)
+      # 4. 安裝系統依賴 (因為換回 22.04，這些舊套件就能正常安裝了)
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev zip unzip autoconf automake
+          sudo apt-get install -y \
+            build-essential libtool pkg-config zlib1g-dev \
+            libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev \
+            libssl-dev zip unzip autoconf automake \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev
 
-      # 5. 安裝 Buildozer 和 Cython
+      # 5. 安裝 Buildozer
       - name: Install Buildozer
         run: |
           pip install --upgrade pip
           pip install buildozer cython==0.29.36
 
-      # 6. 自動產生 buildozer.spec 設定檔 (針對你的檔案調整)
+      # 6. 產生並修改 buildozer.spec
       - name: Create buildozer.spec
         run: |
-          # 如果你專案裡已經有 spec 檔，Buildozer 會問是否覆蓋，所以先刪除舊的
           rm -f buildozer.spec
-          
           buildozer init
           
-          # 修改設定檔內容
+          # 修改標題與包名
           sed -i 's/title = My Application/title = Mole Game/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = molegame/' buildozer.spec
           sed -i 's/package.domain = org.test/package.domain = org.test/' buildozer.spec
           
-          # 關鍵：加入你的檔案格式 (mp3, ttf)
+          # 加入檔案格式
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav/' buildozer.spec
           
-          # 關鍵：加入 pygame
+          # 指定 pygame
           sed -i 's/requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
           
           # 橫向螢幕
           sed -i 's/orientation = portrait/orientation = landscape/' buildozer.spec
           
-          # 自動同意 SDK 授權 (避免卡住)
+          # 同意授權
           sed -i 's/# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          
+          # 顯示詳細日誌
+          sed -i 's/log_level = 1/log_level = 2/' buildozer.spec
 
-      # 7. 開始打包 (這步會跑 15~20 分鐘，因為要下載 Android SDK)
+      # 7. 開始打包
       - name: Build APK
         run: |
           yes | buildozer android debug
 
-      # 8. 上傳打包好的 APK
+      # 8. 上傳
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
