@@ -1,4 +1,4 @@
-name: Build Android APK (Stable Pygame)
+name: Build Android APK (Stable Final)
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. 改回 Java 17 (對應 Buildozer 預設的 NDK r25b)
+      # 1. 使用 Java 17 (搭配新版 NDK)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 2. 安裝必要的編譯工具
+      # 2. 安裝系統依賴
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -38,7 +38,7 @@ jobs:
             libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
             autopoint gettext libltdl-dev libsqlite3-dev
 
-      # 3. 安裝 Buildozer (不指定 cython，讓它自動決定)
+      # 3. 安裝 Buildozer
       - name: Install Buildozer
         run: |
           pip install --upgrade pip
@@ -55,7 +55,7 @@ jobs:
           sed -i 's/package.name = myapp/package.name = molegame/' buildozer.spec
           sed -i 's/package.domain = org.test/package.domain = org.test/' buildozer.spec
           
-          # 加入檔案格式
+          # 加入檔案格式 (含 mp3, ttf)
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav/' buildozer.spec
           
           # 指定 pygame
@@ -64,22 +64,14 @@ jobs:
           # 橫向螢幕
           sed -i 's/orientation = portrait/orientation = landscape/' buildozer.spec
           
-          # ⚠️ 關鍵：不要用 master 分支，使用預設穩定版
-          # (這裡我移除了 p4a.branch 的修改指令)
-          
-          # 只編譯 arm64
+          # 只編譯 arm64 (加速且穩定)
           sed -i 's/android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/' buildozer.spec
 
           # 同意授權
           sed -i 's/# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           sed -i 's/# android.install_test_packages = False/android.install_test_packages = True/' buildozer.spec
 
-      # 5. 清理舊環境 (避免之前的失敗檔案殘留)
-      - name: Clean Environment
-        run: |
-          buildozer android clean
-
-      # 6. 開始打包
+      # 5. 開始打包 (移除了 clean 指令，解決報錯)
       - name: Build APK
         run: |
           buildozer android debug
