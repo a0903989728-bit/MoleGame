@@ -1,4 +1,4 @@
-name: Android Build CI
+name: Build Python Game (Windows)
 
 on:
   push:
@@ -7,42 +7,38 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-latest
 
     steps:
-    # -----------------------------------------------------------------
-    # 第一步：一定要先下載程式碼 (Checkout)，否則後面會找不到檔案
-    # -----------------------------------------------------------------
+    # 1. 下載你的程式碼
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # -----------------------------------------------------------------
-    # 第二步：設定 Java 環境 (這一步會去讀取專案檔來做快取，所以必須在 Checkout 之後)
-    # -----------------------------------------------------------------
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
+    # 2. 設定 Python 環境
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+        python-version: '3.10'
 
-    # -----------------------------------------------------------------
-    # 第三步：授權並打包
-    # -----------------------------------------------------------------
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    # 3. 安裝遊戲需要的函式庫 (假設你有用 pygame)
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pygame pyinstaller
+        # 如果你有用到其他套件，請在這裡補上，例如: pip install numpy
 
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
+    # 4. 開始打包成 .exe
+    - name: Build with PyInstaller
+      run: |
+        # --onefile 代表打包成單一檔案
+        # --noconsole 代表執行時不要跳出黑底白字的視窗 (視窗遊戲通常需要這個)
+        # --add-data 用來把音樂和字型包進去 (Windows語法是用分號 ; 分隔)
+        pyinstaller --onefile --noconsole --name "MoleGame" --add-data "game.mp3;." --add-data "menu.mp3;." --add-data "font.ttf;." main.py
 
-    # -----------------------------------------------------------------
-    # 第四步：上傳 APK (使用 v4)
-    # -----------------------------------------------------------------
-    - name: Upload APK
+    # 5. 上傳打包好的 .exe 檔案
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        # 如果不確定路徑，可以用這行萬用字元：
-        # path: app/build/outputs/apk/**/*.apk
+        name: MoleGame-Windows-Exe
+        path: dist/MoleGame.exe
