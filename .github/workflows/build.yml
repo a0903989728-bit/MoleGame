@@ -1,4 +1,4 @@
-name: Build Python Game (Windows)
+name: Build Android APK (Buildozer)
 
 on:
   push:
@@ -7,38 +7,51 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build-android:
+    runs-on: ubuntu-latest
 
     steps:
-    # 1. 下載你的程式碼
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      # 1. 下載程式碼
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    # 2. 設定 Python 環境
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      # 2. 自動產生 buildozer.spec 設定檔 (因為你沒有上傳這個檔)
+      # 這裡我幫你設定了支援 mp3, ttf, 並指定使用 python3 和 pygame
+      - name: Create buildozer.spec
+        run: |
+          echo '[app]' > buildozer.spec
+          echo 'title = Mole Game' >> buildozer.spec
+          echo 'package.name = molegame' >> buildozer.spec
+          echo 'package.domain = org.test' >> buildozer.spec
+          echo 'source.dir = .' >> buildozer.spec
+          echo 'source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav' >> buildozer.spec
+          echo 'version = 0.1' >> buildozer.spec
+          
+          # ⚠️ 重要：如果你是用 Kivy 寫的，請把下面這行改成: requirements = python3,kivy
+          echo 'requirements = python3,pygame' >> buildozer.spec
+          
+          echo 'orientation = landscape' >> buildozer.spec
+          echo 'fullscreen = 1' >> buildozer.spec
+          echo 'android.archs = arm64-v8a' >> buildozer.spec
+          echo 'android.allow_backup = True' >> buildozer.spec
+          echo 'p4a.branch = release' >> buildozer.spec
+          echo '' >> buildozer.spec
+          echo '[buildozer]' >> buildozer.spec
+          echo 'log_level = 2' >> buildozer.spec
+          echo 'warn_on_root = 1' >> buildozer.spec
 
-    # 3. 安裝遊戲需要的函式庫 (假設你有用 pygame)
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pygame pyinstaller
-        # 如果你有用到其他套件，請在這裡補上，例如: pip install numpy
+      # 3. 使用 Docker 環境執行 Buildozer 打包
+      # 這一步會跑很久 (15分鐘以上)，請不要以為當機了
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
 
-    # 4. 開始打包成 .exe
-    - name: Build with PyInstaller
-      run: |
-        # --onefile 代表打包成單一檔案
-        # --noconsole 代表執行時不要跳出黑底白字的視窗 (視窗遊戲通常需要這個)
-        # --add-data 用來把音樂和字型包進去 (Windows語法是用分號 ; 分隔)
-        pyinstaller --onefile --noconsole --name "MoleGame" --add-data "game.mp3;." --add-data "menu.mp3;." --add-data "font.ttf;." main.py
-
-    # 5. 上傳打包好的 .exe 檔案
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: MoleGame-Windows-Exe
-        path: dist/MoleGame.exe
+      # 4. 上傳打包好的 APK
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoleGame-Android
+          path: bin/*.apk
