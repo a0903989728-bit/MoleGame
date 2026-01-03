@@ -1,4 +1,4 @@
-name: Build Android APK (Final Fix)
+name: Build Android APK (Master Branch)
 
 on:
   push:
@@ -11,79 +11,66 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # 1. 下載程式碼
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 設定 Java 11 (Buildozer 最愛版本)
       - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
           java-version: '11'
           distribution: 'temurin'
 
-      # 3. 設定 Python 3.10
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 4. 安裝系統依賴 (補上了 autopoint 和 gettext，這是修復關鍵)
+      # 安裝所有可能的編譯工具 (包含 libtool-bin)
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential libtool pkg-config zlib1g-dev \
+            build-essential libtool libtool-bin pkg-config zlib1g-dev \
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev \
             libssl-dev zip unzip autoconf automake \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
             libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
-            autopoint gettext libltdl-dev
+            autopoint gettext libltdl-dev libsqlite3-dev
 
-      # 5. 安裝 Buildozer
       - name: Install Buildozer
         run: |
           pip install --upgrade pip
+          # 安裝最新版 buildozer
           pip install buildozer cython==0.29.36
 
-      # 6. 產生並修改 buildozer.spec
       - name: Create buildozer.spec
         run: |
           rm -f buildozer.spec
           buildozer init
           
-          # 修改標題與包名
+          # 基本設定
           sed -i 's/title = My Application/title = Mole Game/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = molegame/' buildozer.spec
           sed -i 's/package.domain = org.test/package.domain = org.test/' buildozer.spec
-          
-          # 加入檔案格式
           sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav/' buildozer.spec
-          
-          # 指定 pygame
           sed -i 's/requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
-          
-          # 橫向螢幕
           sed -i 's/orientation = portrait/orientation = landscape/' buildozer.spec
           
-          # ⚠️ 關鍵：在這裡直接設定同意授權，就不需要用 yes | 指令了
-          sed -i 's/# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          # ✅ 關鍵修復 1：使用 Master 分支的 python-for-android (解決 NDK r25 錯誤)
+          sed -i 's/# p4a.branch = master/p4a.branch = master/' buildozer.spec
           
-          # 讓 Buildozer 自動安裝依賴
+          # ✅ 關鍵修復 2：指定 Android 架構 (減少編譯時間與錯誤)
+          sed -i 's/android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/' buildozer.spec
+
+          # 同意授權
+          sed -i 's/# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           sed -i 's/# android.install_test_packages = False/android.install_test_packages = True/' buildozer.spec
 
-      # 7. 清理舊的緩存 (避免壞掉的檔案卡住)
-      - name: Clean Buildozer
-        run: |
-          rm -rf .buildozer
-          rm -rf bin
-
-      # 8. 開始打包 (移除了 'yes |'，這樣如果報錯我們能看清楚原因)
       - name: Build APK
         run: |
-          buildozer android debug
+          # 使用 verbose 模式 (-v) 這樣如果失敗可以看到更詳細的原因
+          buildozer -v android debug
 
-      # 9. 上傳
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
