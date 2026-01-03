@@ -1,4 +1,4 @@
-name: Build Android APK (Buildozer)
+name: Build Android APK (Native)
 
 on:
   push:
@@ -11,45 +11,66 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 下載程式碼
+      # 1. 下載你的程式碼
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 自動產生 buildozer.spec 設定檔 (因為你沒有上傳這個檔)
-      # 這裡我幫你設定了支援 mp3, ttf, 並指定使用 python3 和 pygame
+      # 2. 設定 Java 17 (Android 打包需要)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 3. 設定 Python 3.10
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # 4. 安裝 Buildozer 必要的系統工具 (這行最重要，解決環境問題)
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev zip unzip autoconf automake
+
+      # 5. 安裝 Buildozer 和 Cython
+      - name: Install Buildozer
+        run: |
+          pip install --upgrade pip
+          pip install buildozer cython==0.29.36
+
+      # 6. 自動產生 buildozer.spec 設定檔 (針對你的檔案調整)
       - name: Create buildozer.spec
         run: |
-          echo '[app]' > buildozer.spec
-          echo 'title = Mole Game' >> buildozer.spec
-          echo 'package.name = molegame' >> buildozer.spec
-          echo 'package.domain = org.test' >> buildozer.spec
-          echo 'source.dir = .' >> buildozer.spec
-          echo 'source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav' >> buildozer.spec
-          echo 'version = 0.1' >> buildozer.spec
+          # 如果你專案裡已經有 spec 檔，Buildozer 會問是否覆蓋，所以先刪除舊的
+          rm -f buildozer.spec
           
-          # ⚠️ 重要：如果你是用 Kivy 寫的，請把下面這行改成: requirements = python3,kivy
-          echo 'requirements = python3,pygame' >> buildozer.spec
+          buildozer init
           
-          echo 'orientation = landscape' >> buildozer.spec
-          echo 'fullscreen = 1' >> buildozer.spec
-          echo 'android.archs = arm64-v8a' >> buildozer.spec
-          echo 'android.allow_backup = True' >> buildozer.spec
-          echo 'p4a.branch = release' >> buildozer.spec
-          echo '' >> buildozer.spec
-          echo '[buildozer]' >> buildozer.spec
-          echo 'log_level = 2' >> buildozer.spec
-          echo 'warn_on_root = 1' >> buildozer.spec
+          # 修改設定檔內容
+          sed -i 's/title = My Application/title = Mole Game/' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = molegame/' buildozer.spec
+          sed -i 's/package.domain = org.test/package.domain = org.test/' buildozer.spec
+          
+          # 關鍵：加入你的檔案格式 (mp3, ttf)
+          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,ttf,mp3,wav/' buildozer.spec
+          
+          # 關鍵：加入 pygame
+          sed -i 's/requirements = python3,kivy/requirements = python3,pygame/' buildozer.spec
+          
+          # 橫向螢幕
+          sed -i 's/orientation = portrait/orientation = landscape/' buildozer.spec
+          
+          # 自動同意 SDK 授權 (避免卡住)
+          sed -i 's/# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
 
-      # 3. 使用 Docker 環境執行 Buildozer 打包
-      # 這一步會跑很久 (15分鐘以上)，請不要以為當機了
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          buildozer_version: stable
+      # 7. 開始打包 (這步會跑 15~20 分鐘，因為要下載 Android SDK)
+      - name: Build APK
+        run: |
+          yes | buildozer android debug
 
-      # 4. 上傳打包好的 APK
+      # 8. 上傳打包好的 APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
